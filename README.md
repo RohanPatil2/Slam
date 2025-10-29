@@ -12,16 +12,63 @@ This project implements real-time uncertainty quantification for 2D SLAM systems
 - **Entropy Convergence Score (ECS)** metric for performance evaluation
 - **Active exploration** using entropy-driven navigation
 
+**🆕 NEW FEATURES:**
+- **Synthetic Robot** - Test immediately without any simulator installation!
+- **Advanced A* Path Planning** - Frontier-based exploration with multi-criteria optimization
+- **Publication-Quality Visualizations** - Generate beautiful plots and animations
+- **Complete System Launcher** - One command to run everything
+
+📖 **See [`ADVANCED_FEATURES.md`](ADVANCED_FEATURES.md) for detailed documentation of all new features!**
+
 ## Features
 
+### Core Uncertainty Quantification
 ✅ Real-time entropy grid publishing at 10+ Hz
 ✅ Cell-wise variance tracking using Welford's online algorithm
 ✅ Shannon entropy visualization in RViz
-✅ Active exploration to reduce map uncertainty
+✅ Per-cell variance-to-entropy mapping
+
+### NEW: Synthetic Robot (Zero Setup!)
+✅ **No external simulator required** - works immediately
+✅ Realistic laser scanning with raycasting physics
+✅ Full keyboard control (w/a/s/d/x/m/e)
+✅ Collision detection and smooth motion
+✅ Autonomous exploration patterns
+✅ Proper TF frame publishing
+
+### Active Exploration
+✅ Basic proportional controller (`active_explorer`)
+✅ **Advanced A* path planning** (`advanced_explorer`)
+✅ Frontier-based exploration
+✅ Multi-criteria goal selection (entropy + distance + info gain)
+✅ Path visualization in RViz
+
+### Metrics & Benchmarking
 ✅ Automated ECS logging with plots
 ✅ Benchmark tools for ground truth comparison
+✅ RMSE, precision, recall, F1 metrics
+✅ Time-weighted entropy convergence scoring
 
 ## Quick Start
+
+### Option A: Complete System (Recommended - No Installation Required!)
+
+**NEW:** Run the entire system with synthetic robot - **no external simulator needed!**
+
+```bash
+cd ~/slam_uncertainty_ws
+colcon build --packages-select uncertainty_slam --symlink-install
+source install/setup.bash
+./RUN_COMPLETE_SYSTEM.sh
+```
+
+Choose option 1 for basic testing or option 4 for the full system with all features!
+
+**See `COMPLETE_SYSTEM_GUIDE.md` for detailed instructions.**
+
+---
+
+### Option B: With External Simulator (TurtleBot3 Gazebo)
 
 ### 1. Install Dependencies
 

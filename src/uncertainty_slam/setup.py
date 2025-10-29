@@ -31,7 +31,9 @@ setup(
         'console_scripts': [
             'uncertainty_node = uncertainty_slam.uncertainty_node:main',
             'active_explorer = uncertainty_slam.active_explorer:main',
+            'advanced_explorer = uncertainty_slam.advanced_explorer:main',
             'ecs_logger = uncertainty_slam.ecs_logger:main',
+            'synthetic_robot = uncertainty_slam.synthetic_robot:main',
         ],
     },
 )
