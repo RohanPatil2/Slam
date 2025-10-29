@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(tree:*)",
+      "WebFetch(domain:github.com)",
+      "Bash(chmod:*)",
+      "Bash(colcon build:*)",
+      "Bash(source:*)",
+      "Bash(python3:*)",
+      "Bash(cat:*)",
+      "Bash(dpkg:*)",
+      "Bash(ros2 pkg list:*)",
+      "Bash(apt search:*)",
+      "Bash(./src/uncertainty_slam/TEST_COMMAND.sh:*)",
+      "Bash(readlink:*)",
+      "Bash(ls:*)",
+      "Bash(apt list:*)",
+      "Bash(sudo apt-get update:*)",
+      "Bash(sudo apt-get install:*)",
+      "Bash(echo:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

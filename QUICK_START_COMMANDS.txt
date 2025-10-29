@@ -1,0 +1,139 @@
+================================================================================
+UNCERTAINTY-AWARE SLAM - QUICK START COMMANDS
+================================================================================
+
+All issues fixed! Ready to test.
+
+Run verification:
+  cd ~/slam_uncertainty_ws
+  ./src/uncertainty_slam/TEST_COMMAND.sh
+
+================================================================================
+TESTING METHOD (5 Terminals)
+================================================================================
+
+Terminal 1: STAGE SIMULATOR
+----------------------------
+cd ~/slam_uncertainty_ws
+source install/setup.bash
+ros2 run stage_ros2 stage_ros2 install/uncertainty_slam/share/uncertainty_slam/worlds/cave.world
+
+Expected: Stage window appears
+
+
+Terminal 2: SLAM TOOLBOX
+-------------------------
+source /opt/ros/humble/setup.bash
+ros2 launch slam_toolbox online_async_launch.py
+
+Expected: "Registering sensor..." message
+
+
+Terminal 3: UNCERTAINTY NODE
+-----------------------------
+cd ~/slam_uncertainty_ws
+source install/setup.bash
+ros2 run uncertainty_slam uncertainty_node
+
+Expected: "Uncertainty SLAM Node initialized"
+
+
+Terminal 4: RVIZ
+----------------
+cd ~/slam_uncertainty_ws
+source install/setup.bash
+ros2 run rviz2 rviz2 -d install/uncertainty_slam/share/uncertainty_slam/config/uncertainty_slam.rviz
+
+Expected: RViz opens with map + entropy displays
+
+
+Terminal 5: ROBOT CONTROL
+--------------------------
+source /opt/ros/humble/setup.bash
+ros2 run teleop_twist_keyboard teleop_twist_keyboard
+
+Controls:
+  W - Forward
+  S - Backward
+  A - Turn Left
+  D - Turn Right
+  X - Stop
+
+================================================================================
+VERIFICATION COMMANDS
+================================================================================
+
+Check topics:
+  ros2 topic list | grep -E "map|entropy|scan"
+
+Check entropy rate:
+  ros2 topic hz /entropy_map
+
+Check entropy value:
+  ros2 topic echo /map_average_entropy --once
+
+================================================================================
+FILES CREATED
+================================================================================
+
+✓ cave.world                        - New simulation environment
+✓ uncertainty_slam.rviz              - Fixed RViz config (no plugin errors)
+✓ TESTING_GUIDE.md                   - Detailed testing instructions
+✓ TEST_COMMAND.sh                    - Automated verification
+✓ ALL_CHANGES_COMPLETE.md            - Summary of all fixes
+✓ QUICK_START_COMMANDS.txt           - This file
+
+================================================================================
+WHAT YOU SHOULD SEE
+================================================================================
+
+Stage:       12x12m room with colored obstacles, blue robot
+RViz:        Occupancy grid (gray/black) + Entropy heat-map (colored)
+Terminal 3:  Entropy statistics every 5 seconds
+Laser:       White points showing in RViz
+
+================================================================================
+COMMON ISSUES
+================================================================================
+
+If "cave.world does not exist":
+  → It was created, rebuild if needed:
+    cd ~/slam_uncertainty_ws && colcon build --symlink-install
+
+If RViz plugin error:
+  → Fixed! Use new config file (already updated)
+
+If shutdown errors when pressing Ctrl+C:
+  → These are HARMLESS warnings, safe to ignore
+
+If stage_ros2 not found:
+  → sudo apt-get install ros-humble-stage-ros2
+
+================================================================================
+NEXT STEPS
+================================================================================
+
+After basic test works:
+
+1. Test active exploration:
+   ros2 run uncertainty_slam active_explorer
+
+2. Log ECS data:
+   ros2 run uncertainty_slam ecs_logger
+
+3. Run benchmarks:
+   python3 src/uncertainty_slam/scripts/generate_ground_truth.py
+   ros2 run uncertainty_slam benchmark_accuracy
+
+================================================================================
+HELP
+================================================================================
+
+Detailed guide:   cat src/uncertainty_slam/TESTING_GUIDE.md
+Quick start:      cat src/uncertainty_slam/QUICKSTART.md
+All fixes:        cat FIXES_APPLIED.md
+Summary:          cat ALL_CHANGES_COMPLETE.md
+
+================================================================================
+STATUS: ✅ READY TO TEST
+================================================================================

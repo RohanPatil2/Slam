@@ -1,0 +1,60 @@
+# Cave world for uncertainty-aware SLAM testing
+# This creates a simple indoor environment for testing
+
+define block model
+(
+  size [0.5 0.5 0.5]
+  gui_nose 0
+  ranger_return 1
+)
+
+define topurg ranger
+(
+  sensor(
+    range_max 8.0
+    fov 270.0
+    samples 270
+  )
+  color "black"
+  size [ 0.05 0.05 0.1 ]
+)
+
+define erratic position
+(
+  size [0.35 0.35 0.25]
+  origin [-0.05 0 0 0]
+  gui_nose 1
+  drive "diff"
+  topurg(pose [ 0.050 0.000 -0.100 0.000 ])
+)
+
+resolution 0.02
+interval_sim 100
+
+window
+(
+  size [ 800 600 ]
+  scale 40
+)
+
+# Floor plan - rectangular room with obstacles
+block( pose [ 0 6 0 0 ] size [12 0.2 1] color "gray")   # North wall
+block( pose [ 0 -6 0 0 ] size [12 0.2 1] color "gray")  # South wall
+block( pose [ 6 0 0 0 ] size [0.2 12 1] color "gray")   # East wall
+block( pose [ -6 0 0 0 ] size [0.2 12 1] color "gray")  # West wall
+
+# Obstacles for interesting geometry (creates uncertainty regions)
+block( pose [ 2 2 0 0 ] size [1 1 1] color "red")
+block( pose [ -2 3 0 0 ] size [1.5 1 1] color "blue")
+block( pose [ 3 -3 0 0 ] size [1 1.5 1] color "green")
+block( pose [ -3 -2 0 0 ] size [1 1 1] color "yellow")
+
+# Central obstacle cluster (creates high uncertainty)
+block( pose [ 0 0 0 0 ] size [0.5 2 1] color "orange")
+
+# Additional cave-like features
+block( pose [ 4 3 0 0 ] size [0.8 0.8 1] color "purple")
+block( pose [ -4 2 0 0 ] size [0.6 1.2 1] color "cyan")
+
+# Robot starting position
+erratic( pose [ -4 -4 0 45 ] name "robot" color "blue")

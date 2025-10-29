@@ -1,0 +1,121 @@
+================================================================================
+CORRECT COMMANDS - Use Absolute Paths for Stage
+================================================================================
+
+IMPORTANT: stage_ros2 requires ABSOLUTE paths, not relative paths!
+
+================================================================================
+OPTION 1: USE THE HELPER SCRIPT (EASIEST)
+================================================================================
+
+cd ~/slam_uncertainty_ws
+./RUN_SYSTEM.sh
+
+Then select option 1 to see the correct commands.
+
+================================================================================
+OPTION 2: MANUAL COMMANDS (5 Terminals)
+================================================================================
+
+Terminal 1: STAGE SIMULATOR
+----------------------------
+cd ~/slam_uncertainty_ws
+source install/setup.bash
+ros2 run stage_ros2 stage_ros2 "${PWD}/src/uncertainty_slam/worlds/cave.world"
+
+Note: ${PWD} expands to full absolute path!
+
+
+Terminal 2: SLAM TOOLBOX
+-------------------------
+source /opt/ros/humble/setup.bash
+ros2 launch slam_toolbox online_async_launch.py
+
+
+Terminal 3: UNCERTAINTY NODE
+-----------------------------
+cd ~/slam_uncertainty_ws
+source install/setup.bash
+ros2 run uncertainty_slam uncertainty_node
+
+
+Terminal 4: RVIZ
+----------------
+cd ~/slam_uncertainty_ws
+source install/setup.bash
+ros2 run rviz2 rviz2 -d "${PWD}/install/uncertainty_slam/share/uncertainty_slam/config/uncertainty_slam.rviz"
+
+
+Terminal 5: ROBOT CONTROL
+--------------------------
+source /opt/ros/humble/setup.bash
+ros2 run teleop_twist_keyboard teleop_twist_keyboard
+
+================================================================================
+OPTION 3: COPY-PASTE READY COMMANDS
+================================================================================
+
+# Terminal 1
+cd ~/slam_uncertainty_ws && source install/setup.bash && ros2 run stage_ros2 stage_ros2 "/home/rohan/slam_uncertainty_ws/src/uncertainty_slam/worlds/cave.world"
+
+# Terminal 2
+source /opt/ros/humble/setup.bash && ros2 launch slam_toolbox online_async_launch.py
+
+# Terminal 3
+cd ~/slam_uncertainty_ws && source install/setup.bash && ros2 run uncertainty_slam uncertainty_node
+
+# Terminal 4
+cd ~/slam_uncertainty_ws && source install/setup.bash && ros2 run rviz2 rviz2 -d "/home/rohan/slam_uncertainty_ws/install/uncertainty_slam/share/uncertainty_slam/config/uncertainty_slam.rviz"
+
+# Terminal 5
+source /opt/ros/humble/setup.bash && ros2 run teleop_twist_keyboard teleop_twist_keyboard
+
+================================================================================
+WHY DID THE ORIGINAL COMMAND FAIL?
+================================================================================
+
+WRONG:
+  ros2 run stage_ros2 stage_ros2 install/uncertainty_slam/share/uncertainty_slam/worlds/cave.world
+
+  Problem: stage_ros2 interprets this as relative to CURRENT directory
+  If you're in ~/slam_uncertainty_ws, it looks for:
+    ~/slam_uncertainty_ws/install/uncertainty_slam/share/uncertainty_slam/worlds/cave.world
+  But if you change directory, it breaks!
+
+CORRECT:
+  ros2 run stage_ros2 stage_ros2 "${PWD}/src/uncertainty_slam/worlds/cave.world"
+
+  Solution: ${PWD} gives absolute path, works from any location
+
+ALSO CORRECT:
+  ros2 run stage_ros2 stage_ros2 "/home/rohan/slam_uncertainty_ws/src/uncertainty_slam/worlds/cave.world"
+
+  Solution: Hardcoded absolute path, always works
+
+================================================================================
+VERIFICATION
+================================================================================
+
+Before running, verify file exists:
+  ls -l /home/rohan/slam_uncertainty_ws/src/uncertainty_slam/worlds/cave.world
+
+Should show:
+  -rw-r--r-- 1 rohan rohan 1510 Oct 28 23:43 ...cave.world
+
+If missing:
+  cd ~/slam_uncertainty_ws
+  colcon build --symlink-install
+  source install/setup.bash
+
+================================================================================
+QUICK TEST (Single Command)
+================================================================================
+
+Test just Stage first:
+  cd ~/slam_uncertainty_ws
+  source install/setup.bash
+  ros2 run stage_ros2 stage_ros2 "$(pwd)/src/uncertainty_slam/worlds/cave.world"
+
+Expected: Stage window opens with robot in 12x12m room
+
+================================================================================
