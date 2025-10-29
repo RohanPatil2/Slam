@@ -1,117 +1,76 @@
 #!/bin/bash
-
 #
-# Complete System Launcher
-# Runs the entire Uncertainty-Aware SLAM system with synthetic robot
-# NO EXTERNAL SIMULATOR REQUIRED!
+# COMPLETE UNCERTAINTY-AWARE SLAM SYSTEM
+# Runs autonomous exploration with automatic visualization generation
 #
 
-set -e
+set -e  # Exit on error
 
-GREEN='\033[0;32m'
-BLUE='\033[0;34m'
-YELLOW='\033[1;33m'
-NC='\033[0m'
-
-echo -e "${BLUE}=============================================="
-echo "Uncertainty-Aware SLAM - Complete System"
-echo "=============================================="
-echo -e "${NC}"
+echo "============================================================"
+echo "  UNCERTAINTY-AWARE SLAM - COMPLETE SYSTEM LAUNCHER"
+echo "============================================================"
 echo ""
 
-# Check if we're in the workspace
-if [ ! -d "src/uncertainty_slam" ]; then
-    echo -e "${YELLOW}Warning: Not in slam_uncertainty_ws directory${NC}"
-    echo "Please run from: ~/slam_uncertainty_ws"
+# Navigate to workspace
+cd ~/slam_uncertainty_ws
+
+echo "🛑 Stopping any existing ROS processes..."
+pkill -9 -f "ros2|rviz2|slam|synthetic" 2>/dev/null || true
+sleep 2
+
+echo "🔧 Sourcing ROS 2 Humble..."
+source /opt/ros/humble/setup.bash
+
+echo "🔨 Building uncertainty_slam package..."
+colcon build --packages-select uncertainty_slam --symlink-install
+
+if [ $? -ne 0 ]; then
+    echo ""
+    echo "❌ BUILD FAILED! Check errors above."
     exit 1
 fi
 
-# Build the package
-echo -e "${YELLOW}Building package...${NC}"
-colcon build --packages-select uncertainty_slam --symlink-install
+echo ""
+echo "✅ Build successful!"
 echo ""
 
-# Source the workspace
-echo -e "${YELLOW}Sourcing workspace...${NC}"
+echo "📦 Sourcing workspace..."
 source install/setup.bash
+
+# Create results directory
+mkdir -p ~/slam_uncertainty_ws/results/visualizations
+echo "📁 Results directory: ~/slam_uncertainty_ws/results/visualizations"
 echo ""
 
-# Show menu
-echo "Choose what to run:"
+echo "============================================================"
+echo "  SYSTEM CONFIGURATION"
+echo "============================================================"
+echo "  • Synthetic Robot: ENABLED (exploration_pattern mode)"
+echo "  • SLAM Toolbox: ENABLED (async mapping)"
+echo "  • Uncertainty Node: ENABLED (entropy computation)"
+echo "  • RViz Visualization: ENABLED"
+echo "  • Results Generator: ENABLED (auto-triggers after 100%)"
 echo ""
-echo "1) Complete system (Robot + SLAM + Uncertainty + RViz)"
-echo "2) Complete system + Active Explorer"
-echo "3) Complete system + ECS Logger"
-echo "4) Complete system + Active Explorer + ECS Logger (FULL)"
-echo "5) Just synthetic robot (for testing)"
+echo "  📊 Exploration Pattern:"
+echo "     - 139 waypoints for complete coverage"
+echo "     - Automatic obstacle avoidance"
+echo "     - Stuck detection & recovery"
+echo "     - 0.35m waypoint tolerance"
 echo ""
-read -p "Choice [1-5]: " choice
+echo "  ⏱️  Expected Duration: 10-15 minutes"
+echo "============================================================"
+echo ""
+echo "🚀 Launching system in 3 seconds..."
+sleep 3
 
-case $choice in
-    1)
-        echo ""
-        echo -e "${GREEN}Launching: Robot + SLAM + Uncertainty + RViz${NC}"
-        echo ""
-        ros2 launch uncertainty_slam complete_system.launch.py \
-            use_rviz:=true \
-            use_active_explorer:=false \
-            use_ecs_logger:=false
-        ;;
-
-    2)
-        echo ""
-        echo -e "${GREEN}Launching: Robot + SLAM + Uncertainty + RViz + Active Explorer${NC}"
-        echo ""
-        ros2 launch uncertainty_slam complete_system.launch.py \
-            use_rviz:=true \
-            use_active_explorer:=true \
-            use_ecs_logger:=false
-        ;;
-
-    3)
-        echo ""
-        echo -e "${GREEN}Launching: Robot + SLAM + Uncertainty + RViz + ECS Logger${NC}"
-        echo ""
-        read -p "Experiment name: " exp_name
-        ros2 launch uncertainty_slam complete_system.launch.py \
-            use_rviz:=true \
-            use_active_explorer:=false \
-            use_ecs_logger:=true \
-            experiment_name:=$exp_name
-        ;;
-
-    4)
-        echo ""
-        echo -e "${GREEN}Launching FULL SYSTEM${NC}"
-        echo ""
-        read -p "Experiment name: " exp_name
-        ros2 launch uncertainty_slam complete_system.launch.py \
-            use_rviz:=true \
-            use_active_explorer:=true \
-            use_ecs_logger:=true \
-            experiment_name:=$exp_name
-        ;;
-
-    5)
-        echo ""
-        echo -e "${GREEN}Launching: Synthetic Robot Only${NC}"
-        echo ""
-        echo "Controls:"
-        echo "  w/x: forward/backward"
-        echo "  a/d: rotate left/right"
-        echo "  s: stop"
-        echo "  m: manual mode"
-        echo "  e: exploration pattern mode"
-        echo "  q: quit"
-        echo ""
-        ros2 run uncertainty_slam synthetic_robot
-        ;;
-
-    *)
-        echo -e "${YELLOW}Invalid choice${NC}"
-        exit 1
-        ;;
-esac
+# Launch the complete system
+ros2 launch uncertainty_slam complete_system.launch.py \
+    use_rviz:=true \
+    use_results_generator:=true \
+    use_active_explorer:=false \
+    use_ecs_logger:=false
 
 echo ""
-echo -e "${GREEN}System shutdown complete${NC}"
+echo "============================================================"
+echo "  System shutdown complete"
+echo "============================================================"

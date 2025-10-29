@@ -34,6 +34,7 @@ setup(
             'advanced_explorer = uncertainty_slam.advanced_explorer:main',
             'ecs_logger = uncertainty_slam.ecs_logger:main',
             'synthetic_robot = uncertainty_slam.synthetic_robot:main',
+            'results_generator = uncertainty_slam.results_generator:main',
         ],
     },
 )

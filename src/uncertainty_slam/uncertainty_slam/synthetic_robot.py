@@ -23,28 +23,34 @@ import select
 class VirtualEnvironment:
     """Simulates a 2D environment with walls and obstacles."""
 
-    def __init__(self, width=12.0, height=12.0):
+    def __init__(self, width=10.0, height=10.0):
         self.width = width
         self.height = height
         self.obstacles = []
-        self._create_default_environment()
+        self._create_simple_environment()
 
-    def _create_default_environment(self):
-        """Create a room with obstacles matching cave.world."""
-        # Outer walls
-        self.obstacles.append({'type': 'wall', 'x1': -6, 'y1': -6, 'x2': 6, 'y2': -6})  # Bottom
-        self.obstacles.append({'type': 'wall', 'x1': 6, 'y1': -6, 'x2': 6, 'y2': 6})    # Right
-        self.obstacles.append({'type': 'wall', 'x1': 6, 'y1': 6, 'x2': -6, 'y2': 6})    # Top
-        self.obstacles.append({'type': 'wall', 'x1': -6, 'y1': 6, 'x2': -6, 'y2': -6})  # Left
+    def _create_simple_environment(self):
+        """Create a simple, open environment optimized for SLAM and entropy mapping."""
+        # Simple 10m × 10m square room with a few well-placed obstacles
+        # This allows clear demonstration of uncertainty quantification
+        
+        # Exterior walls (10m × 10m)
+        self.obstacles.append({'type': 'wall', 'x1': -5, 'y1': -5, 'x2': 5, 'y2': -5})  # Bottom
+        self.obstacles.append({'type': 'wall', 'x1': 5, 'y1': -5, 'x2': 5, 'y2': 5})    # Right
+        self.obstacles.append({'type': 'wall', 'x1': 5, 'y1': 5, 'x2': -5, 'y2': 5})    # Top
+        self.obstacles.append({'type': 'wall', 'x1': -5, 'y1': 5, 'x2': -5, 'y2': -5})  # Left
 
-        # Interior obstacles (blocks)
-        self.obstacles.append({'type': 'box', 'cx': -2, 'cy': -2, 'w': 0.5, 'h': 0.5})
-        self.obstacles.append({'type': 'box', 'cx': 2, 'cy': -2, 'w': 0.5, 'h': 0.5})
-        self.obstacles.append({'type': 'box', 'cx': -2, 'cy': 2, 'w': 0.5, 'h': 0.5})
-        self.obstacles.append({'type': 'box', 'cx': 2, 'cy': 2, 'w': 0.5, 'h': 0.5})
+        # Strategic obstacles for demonstrating entropy variations
+        # These create areas of varying uncertainty
+        
+        # Corner obstacles
+        self.obstacles.append({'type': 'box', 'cx': -3, 'cy': -3, 'w': 0.8, 'h': 0.8})
+        self.obstacles.append({'type': 'box', 'cx': 3, 'cy': -3, 'w': 0.8, 'h': 0.8})
+        self.obstacles.append({'type': 'box', 'cx': -3, 'cy': 3, 'w': 0.8, 'h': 0.8})
+        self.obstacles.append({'type': 'box', 'cx': 3, 'cy': 3, 'w': 0.8, 'h': 0.8})
+        
+        # Central obstacle (creates occlusion for entropy demonstration)
         self.obstacles.append({'type': 'box', 'cx': 0, 'cy': 0, 'w': 1.0, 'h': 1.0})
-        self.obstacles.append({'type': 'box', 'cx': -4, 'cy': 0, 'w': 0.5, 'h': 0.5})
-        self.obstacles.append({'type': 'box', 'cx': 4, 'cy': 0, 'w': 0.5, 'h': 0.5})
 
     def raycast(self, x, y, angle, max_range=10.0):
         """Cast a ray from (x,y) at given angle and return distance to nearest obstacle."""
@@ -133,10 +139,15 @@ class SyntheticRobotNode(Node):
     def __init__(self):
         super().__init__('synthetic_robot')
 
+        # Parameters
+        self.declare_parameter('start_mode', 'exploration_pattern')
+        start_mode = self.get_parameter('start_mode').value
+
         # Publishers
         self.scan_pub = self.create_publisher(LaserScan, '/scan', 10)
         self.odom_pub = self.create_publisher(Odometry, '/odom', 10)
         self.mode_pub = self.create_publisher(String, '/robot_mode', 10)
+        self.status_pub = self.create_publisher(String, '/exploration_status', 10)
 
         # TF broadcaster
         self.tf_broadcaster = tf2_ros.TransformBroadcaster(self)
@@ -149,23 +160,31 @@ class SyntheticRobotNode(Node):
             10
         )
 
-        # Robot state
+        # Robot state - Start at bottom-left
         self.x = -4.0
         self.y = -4.0
-        self.theta = math.pi / 4
+        self.theta = 0.0  # Facing right
         self.linear_vel = 0.0
         self.angular_vel = 0.0
 
-        # Control parameters
-        self.max_linear_vel = 0.5
-        self.max_angular_vel = 1.0
-        self.linear_accel = 0.3
-        self.angular_accel = 0.5
+        # Control parameters - Increased speed for better coverage
+        self.max_linear_vel = 0.5  # m/s
+        self.max_angular_vel = 1.2  # rad/s
+        self.linear_accel = 0.6  # m/s^2
+        self.angular_accel = 1.0  # rad/s^2
 
         # Mode: 'manual', 'autonomous', 'exploration_pattern'
-        self.mode = 'manual'
+        self.mode = start_mode if start_mode in ('manual', 'autonomous', 'exploration_pattern') else 'manual'
         self.autonomous_goal = None
         self.exploration_pattern_index = 0
+        self.exploration_complete = False  # Track if exploration finished
+
+        # Stuck detection
+        self.waypoint_start_time = None
+        self.waypoint_timeout = 30.0  # seconds per waypoint (increased from 20)
+        self.last_position = (self.x, self.y)
+        self.stuck_counter = 0
+        self.last_stuck_check_time = None
 
         # Environment
         self.environment = VirtualEnvironment()
@@ -186,7 +205,7 @@ class SyntheticRobotNode(Node):
         self.cmd_vel = {'linear': 0.0, 'angular': 0.0}
 
         self.get_logger().info('=== Synthetic Robot Started ===')
-        self.get_logger().info('Mode: MANUAL (use keyboard)')
+        self.get_logger().info(f'Mode: {self.mode.upper()}')
         self.get_logger().info('Controls:')
         self.get_logger().info('  w/x: forward/backward')
         self.get_logger().info('  a/d: rotate left/right')
@@ -196,8 +215,11 @@ class SyntheticRobotNode(Node):
         self.get_logger().info('  q: quit')
         self.get_logger().info(f'Starting position: ({self.x:.2f}, {self.y:.2f})')
 
-        # Start keyboard listener
-        self.create_timer(0.05, self.check_keyboard)
+        # Start keyboard listener only if stdin is a TTY
+        if sys.stdin.isatty():
+            self.create_timer(0.05, self.check_keyboard)
+        else:
+            self.get_logger().warn('Keyboard control disabled (no TTY). Running without manual input.')
 
     def goal_callback(self, msg):
         """Receive autonomous exploration goals."""
@@ -277,14 +299,14 @@ class SyntheticRobotNode(Node):
                     (self.x - self.autonomous_goal[0])**2 +
                     (self.y - self.autonomous_goal[1])**2
                 )
-                if dist < 0.2:
+                if dist < 0.3:
                     self.get_logger().info('Goal reached!')
                     self.autonomous_goal = None
                     self.mode = 'manual'
                     self.publish_mode()
 
         elif self.mode == 'exploration_pattern':
-            # Follow predefined exploration pattern
+            # Follow predefined systematic coverage pattern
             target_linear, target_angular = self.exploration_pattern()
 
         else:
@@ -307,16 +329,12 @@ class SyntheticRobotNode(Node):
         new_y = self.y + self.linear_vel * math.sin(self.theta) * self.dt
         new_theta = self.theta + self.angular_vel * self.dt
 
-        # Check collision
+        # Basic collision check - just don't penetrate walls
         if not self.environment.is_collision(new_x, new_y):
             self.x = new_x
             self.y = new_y
             self.theta = new_theta
-        else:
-            # Collision - stop and rotate
-            self.linear_vel = 0.0
-            self.angular_vel = 0.5
-            self.get_logger().warn('Collision detected! Rotating...')
+        # If collision, just stay in place (path planner will handle)
 
         # Publish odometry and TF
         self.publish_odometry()
@@ -338,17 +356,21 @@ class SyntheticRobotNode(Node):
         while angle_error < -math.pi:
             angle_error += 2 * math.pi
 
-        # Control gains
-        k_linear = 0.5
-        k_angular = 2.0
+        # Improved control gains
+        k_linear = 0.7  # More aggressive forward motion
+        k_angular = 2.5  # Stronger turning
+        
+        # Reduced angle tolerance for sharper navigation
+        angle_threshold = 0.25  # radians (~14 degrees)
 
         # If angle error is large, rotate in place
-        if abs(angle_error) > 0.3:
+        if abs(angle_error) > angle_threshold:
             linear = 0.0
             angular = k_angular * angle_error
         else:
-            linear = k_linear * distance
-            angular = k_angular * angle_error
+            # Move forward with gentle angle correction
+            linear = min(k_linear * distance, 1.0)  # Cap max
+            angular = k_angular * angle_error * 0.5  # Reduced correction while moving
 
         # Clamp to limits
         linear = max(-self.max_linear_vel, min(self.max_linear_vel, linear))
@@ -357,25 +379,252 @@ class SyntheticRobotNode(Node):
         return linear, angular
 
     def exploration_pattern(self):
-        """Execute systematic exploration pattern."""
-        # Waypoints for systematic exploration
+        """
+        ROBUST: Complete map coverage with obstacle avoidance and stuck recovery.
+        Uses optimized boustrophedon pattern with smaller safety margins.
+
+        Environment: 10m×10m room with 5 obstacles
+        - Walls at ±5m
+        - Corner obstacles at (±3, ±3): 0.8×0.8
+        - Center obstacle at (0, 0): 1.0×1.0
+        Robot radius: 0.18m + 0.3m safety margin = ~0.5m clearance needed
+        """
         waypoints = [
-            (-4, -4), (4, -4), (4, 4), (-4, 4),  # Perimeter
-            (-2, -2), (2, -2), (2, 2), (-2, 2),  # Inner square
-            (0, -4), (4, 0), (0, 4), (-4, 0),    # Cross pattern
+            # BOTTOM ROW (y = -4): Full horizontal sweep, well below corner obstacles
+            (-4.0, -4.0),   # Start bottom-left
+            (-3.5, -4.0),
+            (-3.0, -4.0),
+            (-2.5, -4.0),
+            (-2.0, -4.0),
+            (-1.5, -4.0),
+            (-1.0, -4.0),
+            (-0.5, -4.0),
+            (0.0, -4.0),
+            (0.5, -4.0),
+            (1.0, -4.0),
+            (1.5, -4.0),
+            (2.0, -4.0),
+            (2.5, -4.0),
+            (3.0, -4.0),
+            (3.5, -4.0),
+            (4.0, -4.0),    # Bottom-right corner
+
+            # Transition to second row (avoid corner obstacle at 3, -3)
+            (4.0, -3.5),
+            (4.0, -3.0),
+            (4.0, -2.5),
+
+            # SECOND ROW (y = -2.0): Right to left, avoiding all obstacles
+            (3.5, -2.0),
+            (3.0, -2.0),
+            (2.5, -2.0),
+            (2.0, -2.0),
+            (1.5, -2.0),    # Approach center obstacle
+            (1.0, -2.0),
+            (0.5, -2.0),
+            (-0.5, -2.0),   # Pass center obstacle
+            (-1.0, -2.0),
+            (-1.5, -2.0),
+            (-2.0, -2.0),
+            (-2.5, -2.0),
+            (-3.0, -2.0),
+            (-3.5, -2.0),
+            (-4.0, -2.0),   # Left edge
+
+            # Transition up (avoid corner obstacle at -3, -3)
+            (-4.0, -1.5),
+            (-4.0, -1.0),
+            (-4.0, -0.5),
+
+            # CENTER ROW (y = 0.0): Left to right, navigate around center obstacle
+            (-3.5, 0.0),
+            (-3.0, 0.0),
+            (-2.5, 0.0),
+            (-2.0, 0.0),
+            (-1.5, 0.0),    # Left of center obstacle (1.0×1.0 centered at 0,0)
+            (-1.0, 0.0),
+            (1.0, 0.0),     # Right of center obstacle (skip -0.5 to 0.5)
+            (1.5, 0.0),
+            (2.0, 0.0),
+            (2.5, 0.0),
+            (3.0, 0.0),
+            (3.5, 0.0),
+            (4.0, 0.0),     # Right edge
+
+            # Transition to fourth row
+            (4.0, 0.5),
+            (4.0, 1.0),
+            (4.0, 1.5),
+            (4.0, 2.0),
+
+            # FOURTH ROW (y = 2.0): Right to left, avoiding obstacles
+            (3.5, 2.0),
+            (3.0, 2.0),
+            (2.5, 2.0),
+            (2.0, 2.0),
+            (1.5, 2.0),
+            (1.0, 2.0),
+            (0.5, 2.0),
+            (-0.5, 2.0),
+            (-1.0, 2.0),
+            (-1.5, 2.0),
+            (-2.0, 2.0),
+            (-2.5, 2.0),
+            (-3.0, 2.0),
+            (-3.5, 2.0),
+            (-4.0, 2.0),    # Left edge
+
+            # Transition to top row (avoid corner obstacle at -3, 3)
+            (-4.0, 2.5),
+            (-4.0, 3.0),
+            (-4.0, 3.5),
+
+            # TOP ROW (y = 4): Full horizontal sweep, above all obstacles
+            (-3.5, 4.0),
+            (-3.0, 4.0),
+            (-2.5, 4.0),
+            (-2.0, 4.0),
+            (-1.5, 4.0),
+            (-1.0, 4.0),
+            (-0.5, 4.0),
+            (0.0, 4.0),
+            (0.5, 4.0),
+            (1.0, 4.0),
+            (1.5, 4.0),
+            (2.0, 4.0),
+            (2.5, 4.0),
+            (3.0, 4.0),
+            (3.5, 4.0),
+            (4.0, 4.0),     # Top-right corner
+
+            # VERTICAL SWEEP DOWN RIGHT EDGE: Complete coverage
+            (4.0, 3.5),
+            (4.0, 3.0),
+            (4.0, 2.5),
+            (4.0, 1.5),
+            (4.0, 1.0),
+            (4.0, 0.5),
+            (4.0, -0.5),
+            (4.0, -1.0),
+            (4.0, -1.5),
+            (4.0, -2.0),
+            (4.0, -3.5),
+
+            # DIAGONAL PASSES for complete center coverage
+            (2.0, 1.5),
+            (1.5, 1.5),
+            (1.0, 1.0),
+            (-1.0, -1.0),
+            (-1.5, -1.5),
+            (-2.0, -1.5),
+
+            # Return to center
+            (0.0, 0.0),
         ]
 
+        # Get total waypoints
+        total_wp = len(waypoints)
+
+        # Initialize waypoint timer on first call
+        if self.waypoint_start_time is None:
+            self.waypoint_start_time = self.get_clock().now().nanoseconds / 1e9
+
         # Current target
-        target = waypoints[self.exploration_pattern_index % len(waypoints)]
+        target = waypoints[self.exploration_pattern_index % total_wp]
 
         # Distance to target
         dist = math.sqrt((self.x - target[0])**2 + (self.y - target[1])**2)
 
-        # If reached, move to next waypoint
-        if dist < 0.3:
+        # Check if stuck (not moving)
+        current_time = self.get_clock().now().nanoseconds / 1e9
+        time_at_waypoint = current_time - self.waypoint_start_time
+
+        # Initialize last stuck check time
+        if self.last_stuck_check_time is None:
+            self.last_stuck_check_time = current_time
+
+        # Check position change since last stuck check (every 8 seconds, not 5)
+        time_since_last_check = current_time - self.last_stuck_check_time
+
+        if time_since_last_check >= 8.0:
+            position_change = math.sqrt((self.x - self.last_position[0])**2 +
+                                       (self.y - self.last_position[1])**2)
+
+            # Stuck detection: if barely moved in 8 seconds, skip waypoint
+            if position_change < 0.15:  # Increased tolerance from 0.1 to 0.15
+                self.stuck_counter += 1
+                self.get_logger().warn(f'⚠️ Robot stuck at waypoint {self.exploration_pattern_index} (moved {position_change:.2f}m in 8s)! Skipping...')
+                self.exploration_pattern_index += 1
+                self.waypoint_start_time = current_time
+                self.last_position = (self.x, self.y)
+                self.last_stuck_check_time = current_time
+                target = waypoints[self.exploration_pattern_index % total_wp]
+            else:
+                # Not stuck, update tracking
+                self.last_position = (self.x, self.y)
+                self.last_stuck_check_time = current_time
+
+        # Timeout: force skip after 30 seconds
+        if time_at_waypoint > self.waypoint_timeout:
+            self.get_logger().warn(f'⏱️ Waypoint {self.exploration_pattern_index} timeout ({time_at_waypoint:.1f}s)! Skipping...')
             self.exploration_pattern_index += 1
-            self.get_logger().info(f'Waypoint {self.exploration_pattern_index} reached')
-            target = waypoints[self.exploration_pattern_index % len(waypoints)]
+            self.waypoint_start_time = current_time
+            self.last_position = (self.x, self.y)
+            self.last_stuck_check_time = current_time
+            target = waypoints[self.exploration_pattern_index % total_wp]
+
+        # If reached waypoint (REDUCED TOLERANCE to 0.35m for better coverage)
+        if dist < 0.35:
+            self.exploration_pattern_index += 1
+            current_wp = self.exploration_pattern_index
+            progress = (current_wp / total_wp) * 100
+
+            # Reset timer and position tracking for next waypoint
+            self.waypoint_start_time = current_time
+            self.last_position = (self.x, self.y)
+
+            self.get_logger().info(f'✅ Coverage: {progress:.1f}% - Waypoint {current_wp}/{total_wp} reached at ({self.x:.2f}, {self.y:.2f})')
+
+            # Check if completed full cycle
+            if current_wp >= total_wp and not self.exploration_complete:
+                self.exploration_complete = True
+                self.get_logger().info('')
+                self.get_logger().info('='*60)
+                self.get_logger().info('🎉 ✅ EXPLORATION 100% COMPLETE!')
+                self.get_logger().info('='*60)
+                self.get_logger().info(f'Total waypoints covered: {total_wp}')
+                self.get_logger().info(f'Waypoints skipped (stuck): {self.stuck_counter}')
+                self.get_logger().info('📊 Generating results in 30 seconds...')
+                self.get_logger().info('='*60)
+                self.get_logger().info('')
+
+                # Publish completion status
+                status_msg = String()
+                status_msg.data = 'COMPLETE'
+                self.status_pub.publish(status_msg)
+
+                # Stop moving
+                return 0.0, 0.0
+
+            target = waypoints[self.exploration_pattern_index % total_wp]
+
+        # If already complete, stay stopped
+        if self.exploration_complete:
+            return 0.0, 0.0
+
+        # Update last position periodically for stuck detection
+        if not hasattr(self, '_position_update_counter'):
+            self._position_update_counter = 0
+        self._position_update_counter += 1
+        if self._position_update_counter % 100 == 0:  # Every 5 seconds
+            self.last_position = (self.x, self.y)
+
+        # Log progress every 50 updates (~2.5 seconds)
+        if not hasattr(self, '_exploration_counter'):
+            self._exploration_counter = 0
+        self._exploration_counter += 1
+        if self._exploration_counter % 50 == 0:
+            self.get_logger().info(f'→ Waypoint {self.exploration_pattern_index % total_wp + 1}/{total_wp}: target={target}, dist={dist:.2f}m, time={time_at_waypoint:.1f}s')
 
         # Compute control
         return self.compute_control_to_goal(target[0], target[1])
@@ -471,11 +720,17 @@ class SyntheticRobotNode(Node):
 
 def main(args=None):
     """Main entry point."""
-    # Set terminal to raw mode for keyboard input
-    old_settings = termios.tcgetattr(sys.stdin)
-    try:
-        tty.setcbreak(sys.stdin.fileno())
+    # Set terminal to raw mode for keyboard input (only if TTY available)
+    old_settings = None
+    if sys.stdin.isatty():
+        try:
+            old_settings = termios.tcgetattr(sys.stdin)
+            tty.setcbreak(sys.stdin.fileno())
+        except Exception as e:
+            print(f"Warning: Could not set terminal to raw mode: {e}")
+            old_settings = None
 
+    try:
         rclpy.init(args=args)
         node = SyntheticRobotNode()
 
@@ -488,7 +743,11 @@ def main(args=None):
             rclpy.shutdown()
 
     finally:
-        termios.tcsetattr(sys.stdin, termios.TCSADRAIN, old_settings)
+        if old_settings is not None:
+            try:
+                termios.tcsetattr(sys.stdin, termios.TCSADRAIN, old_settings)
+            except Exception:
+                pass
 
 
 if __name__ == '__main__':

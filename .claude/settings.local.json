@@ -17,7 +17,10 @@
       "Bash(apt list:*)",
       "Bash(sudo apt-get update:*)",
       "Bash(sudo apt-get install:*)",
-      "Bash(echo:*)"
+      "Bash(echo:*)",
+      "Bash(~/slam_uncertainty_ws/VALIDATE_SYSTEM.sh)",
+      "Bash(awk '{print $9, \"\"\"\"(\"\"\"\" $5 \"\"\"\")\"\"\"\"}')",
+      "Bash(~/slam_uncertainty_ws/TEST_FIX.sh)"
     ],
     "deny": [],
     "ask": []

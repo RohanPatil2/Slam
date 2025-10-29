@@ -24,6 +24,7 @@ def generate_launch_description():
     use_rviz = LaunchConfiguration('use_rviz', default='true')
     use_active_explorer = LaunchConfiguration('use_active_explorer', default='false')
     use_ecs_logger = LaunchConfiguration('use_ecs_logger', default='false')
+    use_results_generator = LaunchConfiguration('use_results_generator', default='true')
     experiment_name = LaunchConfiguration('experiment_name', default='test_run')
 
     # SLAM Toolbox parameters
@@ -47,6 +48,11 @@ def generate_launch_description():
             description='Enable ECS logging'
         ),
         DeclareLaunchArgument(
+            'use_results_generator',
+            default_value='true',
+            description='Enable automatic results generation'
+        ),
+        DeclareLaunchArgument(
             'experiment_name',
             default_value='test_run',
             description='Experiment name for logging'
@@ -61,6 +67,7 @@ def generate_launch_description():
         LogInfo(msg='  4. RViz (if use_rviz:=true)'),
         LogInfo(msg='  5. Active Explorer (if use_active_explorer:=true)'),
         LogInfo(msg='  6. ECS Logger (if use_ecs_logger:=true)'),
+        LogInfo(msg='  7. Results Generator (if use_results_generator:=true)'),
         LogInfo(msg=''),
         LogInfo(msg='Keyboard controls:'),
         LogInfo(msg='  w/x: forward/backward'),
@@ -78,6 +85,7 @@ def generate_launch_description():
             output='screen',
             parameters=[{
                 'use_sim_time': False,
+                'start_mode': 'exploration_pattern',
             }]
         ),
 
@@ -153,5 +161,19 @@ def generate_launch_description():
                 'record_duration': 300.0,  # 5 minutes
             }],
             condition=IfCondition(use_ecs_logger),
+        ),
+
+        # 7. Results Generator (conditional)
+        Node(
+            package='uncertainty_slam',
+            executable='results_generator',
+            name='results_generator',
+            output='screen',
+            parameters=[{
+                'use_sim_time': False,
+                'output_dir': '~/slam_uncertainty_ws/results/visualizations',
+                'auto_generate': True,
+            }],
+            condition=IfCondition(use_results_generator),
         ),
     ])
