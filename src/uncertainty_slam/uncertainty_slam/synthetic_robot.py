@@ -1,14 +1,16 @@
 #!/usr/bin/env python3
 """
 Synthetic Robot Data Generator for Uncertainty-Aware SLAM Testing
-COMPLEX ENVIRONMENT VERSION with degraded sensor for rich entropy maps.
+COMPLETE VERSION: Complex Environment + Degraded Sensor + Autonomous Navigation
 
 Features:
-- Multi-room layout with narrow corridors
+- Multi-room layout with narrow corridors (4 rooms + central corridor)
 - 240-degree FOV laser (blind spot behind robot)
 - 4.0m max range (limited visibility)
-- Increased sensor noise
-- Logical pre-mapped exploration route
+- Increased sensor noise (2cm std dev)
+- Autonomous waypoint-based exploration (139 waypoints)
+- Stuck detection and recovery
+- Publishes /cmd_vel for compatibility
 """
 
 import rclpy
@@ -256,10 +258,10 @@ class SyntheticRobotNode(Node):
     """
     Synthetic robot with degraded sensor and complex environment.
 
-    DEGRADED SENSOR:
-    - 240° FOV (blind spot behind)
-    - 4.0m max range
-    - 2cm noise
+    COMPLETE IMPLEMENTATION:
+    1. Complex multi-room environment
+    2. Degraded sensor (240° FOV, 4.0m range, 2cm noise)
+    3. Autonomous waypoint navigation with stuck detection
     """
 
     def __init__(self):
@@ -272,6 +274,7 @@ class SyntheticRobotNode(Node):
         # Publishers
         self.scan_pub = self.create_publisher(LaserScan, '/scan', 10)
         self.odom_pub = self.create_publisher(Odometry, '/odom', 10)
+        self.cmd_vel_pub = self.create_publisher(Twist, '/cmd_vel', 10)  # ⭐ NEW: For compatibility
         self.mode_pub = self.create_publisher(String, '/robot_mode', 10)
         self.status_pub = self.create_publisher(String, '/exploration_status', 10)
 
@@ -333,14 +336,44 @@ class SyntheticRobotNode(Node):
         # Keyboard control
         self.cmd_vel = {'linear': 0.0, 'angular': 0.0}
 
-        self.get_logger().info('=== Synthetic Robot Started (COMPLEX ENVIRONMENT) ===')
+        # Startup message
+        self.get_logger().info('')
+        self.get_logger().info('='*70)
+        self.get_logger().info('🤖 SYNTHETIC ROBOT STARTED - COMPLETE AUTONOMOUS SYSTEM')
+        self.get_logger().info('='*70)
         self.get_logger().info(f'Mode: {self.mode.upper()}')
+        self.get_logger().info('')
+        self.get_logger().info('ENVIRONMENT:')
+        self.get_logger().info('  - 10m × 10m multi-room layout')
+        self.get_logger().info('  - 4 rooms + central corridor')
+        self.get_logger().info('  - Narrow doorways (1.5m)')
+        self.get_logger().info('  - U-shaped and L-shaped obstacles')
+        self.get_logger().info('')
         self.get_logger().info('DEGRADED SENSOR:')
         self.get_logger().info(f'  - Laser FOV: 240° (±120°) - BLIND SPOT BEHIND')
-        self.get_logger().info(f'  - Max Range: {self.range_max}m (reduced)')
+        self.get_logger().info(f'  - Max Range: {self.range_max}m (reduced visibility)')
         self.get_logger().info(f'  - Sensor Noise: 2cm std dev')
-        self.get_logger().info('ENVIRONMENT: 4 Rooms + Narrow Corridors')
+        self.get_logger().info('')
+        self.get_logger().info('AUTONOMOUS NAVIGATION:')
+        self.get_logger().info('  - 139 pre-defined waypoints')
+        self.get_logger().info('  - Stuck detection (8s, 0.15m threshold)')
+        self.get_logger().info('  - Waypoint timeout (30s)')
+        self.get_logger().info('')
         self.get_logger().info(f'Starting position: ({self.x:.2f}, {self.y:.2f})')
+        self.get_logger().info(f'Starting orientation: {math.degrees(self.theta):.1f}°')
+
+        # Check if starting position is in collision
+        if self.environment.is_collision(self.x, self.y):
+            self.get_logger().error('⚠️ WARNING: Starting position is in COLLISION!')
+        else:
+            self.get_logger().info('✅ Starting position is CLEAR')
+
+        self.get_logger().info('='*70)
+
+        if self.mode == 'exploration_pattern':
+            self.get_logger().info('')
+            self.get_logger().info('🚀 AUTONOMOUS EXPLORATION WILL BEGIN IN 3 SECONDS...')
+            self.get_logger().info('')
 
         # Start keyboard listener if TTY available
         if sys.stdin.isatty():
@@ -459,9 +492,10 @@ class SyntheticRobotNode(Node):
             self.y = new_y
             self.theta = new_theta
 
-        # Publish odometry and TF
+        # Publish odometry, TF, and cmd_vel
         self.publish_odometry()
         self.publish_tf()
+        self.publish_cmd_vel()  # ⭐ NEW: Publish cmd_vel for compatibility
 
     def compute_control_to_goal(self, goal_x, goal_y):
         """Proportional controller to navigate to goal."""
@@ -498,7 +532,9 @@ class SyntheticRobotNode(Node):
 
     def exploration_pattern(self):
         """
-        PRE-MAPPED ROUTE through complex multi-room environment.
+        AUTONOMOUS WAYPOINT-BASED EXPLORATION
+
+        Pre-mapped route through complex multi-room environment.
 
         Route Logic:
         1. Start at origin (0, 0) in central corridor
@@ -512,6 +548,8 @@ class SyntheticRobotNode(Node):
         9. Return to corridor, enter Room 4 (bottom-right)
         10. Explore Room 4 completely
         11. Return to origin
+
+        Total: 139 waypoints
         """
         waypoints = [
             # ===== PHASE 1: CENTRAL CORRIDOR EXPLORATION =====
@@ -764,7 +802,7 @@ class SyntheticRobotNode(Node):
             target = waypoints[self.exploration_pattern_index % total_wp]
 
         # If reached waypoint
-        if dist < 0.3:  # Tolerance
+        if dist < 0.35:  # Tolerance (was 0.3, increased slightly)
             self.exploration_pattern_index += 1
             current_wp = self.exploration_pattern_index
             progress = (current_wp / total_wp) * 100
@@ -772,7 +810,7 @@ class SyntheticRobotNode(Node):
             self.waypoint_start_time = current_time
             self.last_position = (self.x, self.y)
 
-            self.get_logger().info(f'✅ Progress: {progress:.1f}% - Waypoint {current_wp}/{total_wp} at ({self.x:.2f}, {self.y:.2f})')
+            self.get_logger().info(f'✅ Coverage: {progress:.1f}% - Waypoint {current_wp}/{total_wp} reached at ({self.x:.2f}, {self.y:.2f})')
 
             # Check if completed
             if current_wp >= total_wp and not self.exploration_complete:
@@ -781,8 +819,8 @@ class SyntheticRobotNode(Node):
                 self.get_logger().info('='*60)
                 self.get_logger().info('🎉 ✅ EXPLORATION 100% COMPLETE!')
                 self.get_logger().info('='*60)
-                self.get_logger().info(f'Total waypoints: {total_wp}')
-                self.get_logger().info(f'Skipped waypoints: {self.stuck_counter}')
+                self.get_logger().info(f'Total waypoints covered: {total_wp}')
+                self.get_logger().info(f'Waypoints skipped (stuck): {self.stuck_counter}')
                 self.get_logger().info('📊 Generating results in 30 seconds...')
                 self.get_logger().info('='*60)
 
@@ -803,8 +841,8 @@ class SyntheticRobotNode(Node):
         if not hasattr(self, '_exploration_counter'):
             self._exploration_counter = 0
         self._exploration_counter += 1
-        if self._exploration_counter % 50 == 0:
-            self.get_logger().info(f'→ Waypoint {self.exploration_pattern_index % total_wp + 1}/{total_wp}: target={target}, dist={dist:.2f}m')
+        if self._exploration_counter % 100 == 0:  # Log every 5 seconds (100 * 0.05s)
+            self.get_logger().info(f'→ Waypoint {self.exploration_pattern_index % total_wp + 1}/{total_wp}: target={target}, dist={dist:.2f}m, time={time_at_waypoint:.1f}s')
 
         # Compute control
         return self.compute_control_to_goal(target[0], target[1])
@@ -820,7 +858,7 @@ class SyntheticRobotNode(Node):
         """
         scan = LaserScan()
         scan.header.stamp = self.get_clock().now().to_msg()
-        scan.header.frame_id = 'base_footprint'
+        scan.header.frame_id = 'base_scan'
 
         scan.angle_min = self.angle_min      # -120°
         scan.angle_max = self.angle_max      # +120°
@@ -861,6 +899,17 @@ class SyntheticRobotNode(Node):
         odom.twist.twist.angular.z = self.angular_vel
 
         self.odom_pub.publish(odom)
+
+    def publish_cmd_vel(self):
+        """
+        Publish current velocity commands to /cmd_vel.
+
+        ⭐ NEW: For compatibility with other nodes that expect cmd_vel.
+        """
+        cmd_msg = Twist()
+        cmd_msg.linear.x = self.linear_vel
+        cmd_msg.angular.z = self.angular_vel
+        self.cmd_vel_pub.publish(cmd_msg)
 
     def publish_tf(self):
         """Publish TF transforms."""
